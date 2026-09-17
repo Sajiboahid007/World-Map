@@ -1,0 +1,1034 @@
+/* ==========================================================================
+   Interactive Zoomable World Map - Modern Cartographic Stylesheet (2026 Ultra Edition)
+   60 FPS Butter-Smooth Pan & Zoom • Up to 60x Deep State/Province Zoom
+   ========================================================================== */
+
+:root {
+  /* Color Palette - Light Mode (Default) */
+  --bg-ocean: #dbeafe;
+  --bg-ocean-deep: #bfdbfe;
+  --ocean-gradient-start: #f0f7ff;
+  --ocean-gradient-end: #d0e7ff;
+  
+  --land-base: #f8fafc;
+  --land-stroke: #cbd5e1;
+  --land-hover: #e0f2fe;
+  --land-hover-stroke: #38bdf8;
+  --land-selected: #38bdf8;
+  --land-selected-stroke: #0284c7;
+  
+  --graticule-color: rgba(2, 132, 199, 0.12);
+  --graticule-prime: rgba(2, 132, 199, 0.28);
+  
+  --surface-card: rgba(255, 255, 255, 0.94);
+  --surface-hover: rgba(241, 245, 249, 0.95);
+  --surface-border: rgba(226, 232, 240, 0.85);
+  --surface-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-accent: #0284c7;
+  
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  
+  --zoom-scale: 1;
+  --inverse-scale: 1;
+}
+
+[data-theme="dark"] {
+  --bg-ocean: #090e17;
+  --bg-ocean-deep: #05080f;
+  --ocean-gradient-start: #0f172a;
+  --ocean-gradient-end: #090e17;
+  
+  --land-base: #1e293b;
+  --land-stroke: #334155;
+  --land-hover: #1e3a5f;
+  --land-hover-stroke: #38bdf8;
+  --land-selected: #0284c7;
+  --land-selected-stroke: #7dd3fc;
+  
+  --graticule-color: rgba(56, 189, 248, 0.08);
+  --graticule-prime: rgba(56, 189, 248, 0.22);
+  
+  --surface-card: rgba(15, 23, 42, 0.92);
+  --surface-hover: rgba(30, 41, 59, 0.95);
+  --surface-border: rgba(51, 65, 85, 0.8);
+  --surface-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.5), 0 4px 15px -2px rgba(0, 0, 0, 0.35);
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --text-accent: #38bdf8;
+}
+
+/* ==========================================================================
+   Reset & Base Layout
+   ========================================================================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-family);
+  background-color: var(--bg-ocean);
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Map Viewport & Hardware Accelerated Canvas
+   ========================================================================== */
+.map-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, var(--ocean-gradient-start) 0%, var(--ocean-gradient-end) 100%);
+  contain: layout style paint;
+}
+
+.map-viewport.panning {
+  cursor: grabbing;
+}
+
+/* Stage: GPU hardware transformed container */
+.map-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1010px;
+  height: 666px;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: auto;
+  contain: layout style;
+}
+
+/* Live Slippy Tile Layer (Optional Street Layer) */
+.slippy-tile-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1010px;
+  height: 666px;
+  pointer-events: none;
+  display: none;
+  z-index: 1;
+}
+
+.slippy-tile-layer.active {
+  display: block;
+}
+
+.slippy-tile {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  opacity: 0.95;
+}
+
+.map-viewport.mode-streets .country {
+  fill-opacity: 0.12;
+  stroke: var(--text-accent);
+}
+
+/* SVG Base Styling */
+.world-svg-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1010px;
+  height: 666px;
+  z-index: 2;
+  contain: paint;
+}
+
+.world-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ocean-bg {
+  fill: transparent;
+}
+
+.graticule-line {
+  stroke: var(--graticule-color);
+  stroke-width: 0.8px;
+  stroke-dasharray: 4, 4;
+  pointer-events: none;
+}
+
+.graticule-equator, .graticule-prime {
+  stroke: var(--graticule-prime);
+  stroke-width: 1.2px;
+  stroke-dasharray: none;
+}
+
+/* Country Paths */
+.country {
+  fill: var(--land-base);
+  stroke: var(--land-stroke);
+  stroke-width: 0.65px;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  transition: fill 0.12s ease, stroke 0.12s ease;
+}
+
+/* On hover: just gentle hover tint, NOT marked */
+.country:hover {
+  fill: var(--land-hover);
+  stroke: var(--land-hover-stroke);
+  stroke-width: 1.2px;
+}
+
+/* ONLY when clicked: marked/selected with vivid accent */
+.country.active-selected {
+  fill: var(--land-selected) !important;
+  stroke: var(--land-selected-stroke) !important;
+  stroke-width: 1.8px !important;
+  filter: drop-shadow(0 0 10px rgba(14, 165, 233, 0.6)) !important;
+}
+
+/* ==========================================================================
+   Level of Detail (LOD) - Overlays Layer
+   ========================================================================== */
+.map-overlays {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1010px;
+  height: 666px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Country Labels */
+.country-label {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(var(--inverse-scale));
+  transform-origin: center center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.95), 0 0 2px rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  letter-spacing: 0.2px;
+}
+
+[data-theme="dark"] .country-label {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+.country-label.tier-1 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.country-label.tier-2 {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.country-label.tier-3 {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   State & Province Labels (Deep Regional Zoom)
+   ========================================================================== */
+.place-marker.type-state {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(var(--inverse-scale));
+  transform-origin: center center;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 25;
+}
+
+.place-marker.type-state .place-name {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: #64748b;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.95), 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .place-marker.type-state .place-name {
+  color: #94a3b8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Cities, Towns, Villages */
+.place-marker:not(.type-state) {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(var(--inverse-scale));
+  transform-origin: center center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 0.25s ease;
+  z-index: 30;
+}
+
+.place-marker:hover {
+  z-index: 100;
+}
+
+.place-content {
+  display: flex;
+  align-items: center;
+  gap: 4.5px;
+}
+
+.place-dot {
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.place-marker:hover .place-dot {
+  transform: scale(1.4);
+}
+
+/* Capital */
+.place-marker.type-capital .place-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #f59e0b;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.75);
+}
+
+/* Major City */
+.place-marker.type-city .place-dot {
+  width: 6.5px;
+  height: 6.5px;
+  background-color: var(--text-accent);
+  border: 1.5px solid #ffffff;
+}
+
+/* Town */
+.place-marker.type-town .place-dot {
+  width: 5px;
+  height: 5px;
+  background-color: #10b981;
+  border: 1.2px solid #ffffff;
+}
+
+/* Village */
+.place-marker.type-village .place-dot {
+  width: 4.5px;
+  height: 4.5px;
+  background-color: #f97316;
+  border: 1px solid #ffffff;
+}
+
+.place-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.95), 0 0 2px rgba(255, 255, 255, 0.95);
+  white-space: nowrap;
+}
+
+.place-marker.type-capital .place-name {
+  font-weight: 700;
+}
+
+.place-marker.type-village .place-name {
+  font-size: 9.5px;
+  font-style: italic;
+  color: #334155;
+}
+
+.place-sub {
+  font-size: 8.5px;
+  font-weight: 500;
+  color: #64748b;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+[data-theme="dark"] .place-name {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+[data-theme="dark"] .place-marker.type-village .place-name {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .place-sub {
+  color: #94a3b8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+
+/* ==========================================================================
+   Level of Detail (LOD) Rules (Zero JS overhead, pure GPU CSS)
+   ========================================================================== */
+/* Level 1 (scale < 1.8) */
+.zoom-level-1 .country-label.tier-1 { opacity: 1; }
+.zoom-level-1 .country-label.tier-2 { opacity: 0; }
+.zoom-level-1 .country-label.tier-3 { opacity: 0; }
+.zoom-level-1 .place-marker { opacity: 0; pointer-events: none; }
+.zoom-level-1 .place-marker.tier-1:not(.type-state) { opacity: 0.85; pointer-events: auto; }
+
+/* Level 2 (1.8 <= scale < 4.5) */
+.zoom-level-2 .country-label.tier-1 { opacity: 1; }
+.zoom-level-2 .country-label.tier-2 { opacity: 1; }
+.zoom-level-2 .country-label.tier-3 { opacity: 0; }
+.zoom-level-2 .place-marker.tier-1, .zoom-level-2 .place-marker.tier-2 { opacity: 1; pointer-events: auto; }
+.zoom-level-2 .place-marker.tier-3, .zoom-level-2 .place-marker.tier-4 { opacity: 0; pointer-events: none; }
+
+/* Level 3 (4.5 <= scale < 10.0) - States and Provinces appear clearly! */
+.zoom-level-3 .country-label.tier-1 { opacity: 0.85; }
+.zoom-level-3 .country-label.tier-2 { opacity: 1; }
+.zoom-level-3 .country-label.tier-3 { opacity: 1; }
+.zoom-level-3 .place-marker.tier-1, .zoom-level-3 .place-marker.tier-2, .zoom-level-3 .place-marker.tier-3 { opacity: 1; pointer-events: auto; }
+.zoom-level-3 .place-marker.type-state { opacity: 1; }
+.zoom-level-3 .place-marker.tier-4 { opacity: 0; pointer-events: none; }
+
+/* Level 4 (scale >= 10.0) - Deep state view, towns, villages */
+.zoom-level-4 .country-label { opacity: 0.55; }
+.zoom-level-4 .place-marker { opacity: 1; pointer-events: auto; }
+.zoom-level-4 .place-marker.type-state { opacity: 1; }
+
+/* ==========================================================================
+   UI Controls & Floating Bars (Google Maps Style)
+   ========================================================================== */
+
+/* Glassmorphism Base */
+.glass-panel {
+  background: var(--surface-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  box-shadow: var(--surface-shadow);
+  transition: all 0.25s ease;
+}
+
+/* Floating Search Bar (Top Left) */
+.search-container {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 100;
+  width: 380px;
+  max-width: calc(100vw - 36px);
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 28px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.search-box:focus-within {
+  border-color: var(--text-accent);
+  box-shadow: 0 10px 28px -4px rgba(2, 132, 199, 0.25), 0 4px 10px -2px rgba(0, 0, 0, 0.05);
+}
+
+.search-icon {
+  width: 18px;
+  height: 18px;
+  fill: var(--text-muted);
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14.5px;
+  font-family: inherit;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.icon-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+/* Autocomplete Dropdown */
+.search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 100%;
+  max-height: 380px;
+  overflow-y: auto;
+  border-radius: 16px;
+  padding: 8px;
+  display: none;
+  z-index: 101;
+}
+
+.search-results.active {
+  display: block;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.search-item:hover, .search-item.selected {
+  background: var(--surface-hover);
+}
+
+.search-flag {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.search-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-item-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-item-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(2, 132, 199, 0.1);
+  color: var(--text-accent);
+}
+
+/* Layer Mode Switcher (Top Right) */
+.layer-switcher {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 28px;
+  background: var(--surface-card);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+  z-index: 100;
+}
+
+.layer-btn {
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.layer-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.layer-btn.active {
+  background: var(--text-accent);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+}
+
+/* Quick Continent Filters (Pills) */
+.continent-pills {
+  position: absolute;
+  top: 76px;
+  left: 18px;
+  display: flex;
+  gap: 6px;
+  z-index: 99;
+  max-width: calc(100vw - 36px);
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.continent-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.pill-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--surface-card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--surface-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.pill-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.pill-btn.active {
+  background: var(--text-accent);
+  color: #ffffff;
+  border-color: var(--text-accent);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+}
+
+/* Country Details Card (Sidebar / Floating Panel) */
+.country-card {
+  position: absolute;
+  top: 130px;
+  left: 18px;
+  width: 360px;
+  max-width: calc(100vw - 36px);
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  border-radius: 18px;
+  padding: 20px;
+  z-index: 95;
+  display: none;
+  animation: slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.country-card.active {
+  display: block;
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-flag {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.card-name {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.card-native {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.card-tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(2, 132, 199, 0.12);
+  color: var(--text-accent);
+}
+
+.card-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.stat-box {
+  background: var(--surface-hover);
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--surface-border);
+}
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 3px;
+}
+
+.stat-val {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.card-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.primary-btn {
+  flex: 1;
+  background: var(--text-accent);
+  color: #ffffff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.primary-btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.secondary-btn {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--surface-border);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.secondary-btn:hover {
+  background: rgba(226, 232, 240, 0.8);
+}
+
+/* Map Navigation Controls (Bottom Right) */
+.map-controls {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+.map-control-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.map-control-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-accent);
+}
+
+.map-control-btn + .map-control-btn {
+  border-top: 1px solid var(--surface-border);
+}
+
+.map-control-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+/* Zoom Slider & Indicator (Up to 60x magnification!) */
+.zoom-slider-box {
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  box-shadow: var(--surface-shadow);
+}
+
+.zoom-indicator {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  writing-mode: horizontal-tb;
+}
+
+.zoom-range {
+  writing-mode: bt-lr;
+  -webkit-appearance: slider-vertical;
+  width: 8px;
+  height: 90px;
+  cursor: pointer;
+  accent-color: var(--text-accent);
+}
+
+/* Scale & Coordinates Indicator (Bottom Left) */
+.map-status-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 18px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  backdrop-filter: blur(8px);
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.scale-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.scale-graphic {
+  height: 3px;
+  border-left: 1px solid var(--text-primary);
+  border-right: 1px solid var(--text-primary);
+  border-bottom: 2px solid var(--text-primary);
+  transition: width 0.2s ease;
+}
+
+.scale-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.coords-label {
+  font-family: monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Country Micro Tooltip - Crisp & Responsive */
+.country-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.92);
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translate(-50%, -130%);
+  transition: opacity 0.12s ease;
+}
+
+.country-tooltip.visible {
+  opacity: 1;
+}
+
+.tooltip-flag {
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   Responsive Adaptations
+   ========================================================================== */
+@media (max-width: 640px) {
+  .search-container {
+    top: 12px;
+    left: 12px;
+    width: calc(100vw - 24px);
+  }
+
+  .layer-switcher {
+    top: auto;
+    bottom: 74px;
+    left: 12px;
+    right: auto;
+  }
+
+  .continent-pills {
+    top: 66px;
+    left: 12px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .country-card {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 20px 20px 0 0;
+    max-height: 52vh;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(100%); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .map-controls {
+    bottom: 20px;
+    right: 12px;
+  }
+
+  .zoom-slider-box {
+    display: none;
+  }
+
+  .map-status-bar {
+    display: none;
+  }
+}
